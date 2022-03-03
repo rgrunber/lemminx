@@ -42,11 +42,11 @@
           java: ${{env.GRAALVM_JAVA}}
       - run: ./mvnw -B package -Dnative -DskipTests $([ $(uname -s) = Linux ] && echo "-Dgraalvm.static=-H:+StaticExecutableWithDynamicLibC") -Dcbi.jarsigner.skip=true
       - run: rm org.eclipse.lemminx/target/*.build_artifacts.txt
-      - run: mv org.eclipse.lemminx/target/lemminx-* lemminx-$(git rev-parse --short "$GITHUB_SHA")-${{ matrix.label }}
+      - run: mv org.eclipse.lemminx/target/lemminx-* lemminx-${{ matrix.label }}
       - uses: actions/upload-artifact@v2
         with:
           name: lemminx-${{ matrix.label }}
-          path: lemminx-*-${{ matrix.label }}
+          path: lemminx-${{ matrix.label }}
           if-no-files-found: error
     build-binary-windows:
       runs-on: windows-latest
@@ -79,9 +79,25 @@
           graalvm: ${{env.GRAALVM_VERSION}}
           java: ${{env.GRAALVM_JAVA}}
       - run: .\mvnw.cmd -B package -Dnative -DskipTests -D "cbi.jarsigner.skip=true"
-      - run: mv org.eclipse.lemminx\target\lemminx-*.exe lemminx-$(git rev-parse --short "$Env:GITHUB_SHA")-win32.exe
+      - run: mv org.eclipse.lemminx\target\lemminx-*.exe lemminx-win32.exe
       - uses: actions/upload-artifact@v2
         with:
           name: lemminx-win32
-          path: lemminx-*-win32.exe
+          path: lemminx-win32.exe
           if-no-files-found: error
+    release-binary-artifacts:
+      if: github.event_name != 'pull_request'
+      needs: [build-binary-unix, build-binary-windows]
+      runs-on: ubuntu-latest
+      steps:
+      - uses: actions/download-artifact@v3
+      - run: for f in lemminx-linux lemminx-darwin lemminx-win32; do pushd ${f} && chmod u+x ${f}* && zip ../${f}.zip ${f}* && sha256sum ${f}* > ../${f}.sha256 && popd; done
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: true
+          title: "Development Build"
+          files: |
+            lemminx-*.zip
+            lemminx-*.sha256
